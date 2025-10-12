@@ -3,5 +3,6 @@
 - [x] Nhúng Traffic Map
 - [ ] Tạo border cho phường Cầu Giấy
 - [ ] Tạo đồ thị gồm các node, các đường đi ( khoảng cách các node <=6 m)
+- [ ] Cài đặt trọng số đường đi
 - [ ] Cài đặt thuật toán
 - [ ] Chỉnh sửa
