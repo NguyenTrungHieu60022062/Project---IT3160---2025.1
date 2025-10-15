@@ -77,7 +77,18 @@
         });
 
         document.getElementById("clearBtn").addEventListener("click", clearAll);
-      }
+        fetch('map(1).geojson')
+          .then(response => {
+          if (!response.ok) throw new Error('Không thể tải GeoJSON: ' + response.status);
+          return response.json();
+        })
+          .then(data => {
+          map.data.addGeoJson(data);
+          console.log("GeoJSON đã được thêm vào bản đồ!");
+        })
+          .catch(err => console.error(err));
+        }
+      
 
       function setStart(position) {
         if (startMarker) startMarker.setMap(null);
@@ -190,7 +201,6 @@
       function latLngToText(latLng) {
         return latLng.lat().toFixed(6) + ", " + latLng.lng().toFixed(6);
       }
-
     </script>
 
     <!--
