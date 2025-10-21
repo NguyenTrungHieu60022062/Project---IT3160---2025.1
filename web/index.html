@@ -45,6 +45,8 @@
       let directionsRenderer;
       let trafficLayer;
       let trafficOn = false;
+      let boundaryPoly;
+      let streetLayer;
 
       function initMap() {
         const location = { lat:  21.0227, lng: 105.7918 }; // Cầu Giấy
@@ -52,7 +54,48 @@
           zoom: 15,
           center: location,
         });
+        // load và hiển thị boundary từ geojson
+        fetch("boundary.geojson")
+          .then(r => r.json())
+          .then(boundary => {
+            // tạo polygon cho boundary
+            const coords = boundary.features[0].geometry.coordinates[0].map(
+              c => ({ lat: c[1], lng: c[0] })
+            );
+
+            boundaryPoly = new google.maps.Polygon({
+              paths: coords,
+              strokeColor: "#FF8E78",
+              strokeWeight: 2,
+              fillColor: "#FCFCCA",
+              fillOpacity: 0.2,
+              map: map,
+              clickable: false
+          });
+          // chỉ cho phép click trong khu vực boundary
+          map.addListener("click", (e) => {
+              if (google.maps.geometry.poly.containsLocation(e.latLng, boundaryPoly)) {
+                handleMapClick(e.latLng);
+              } else {
+                alert("Vui lòng chọn điểm trong khu vực Cầu Giấy.");
+              }
+            });
+          });
         
+          fetch("nodes.geojson")
+            .then(r => r.json())
+            .then(streets => {
+            streetLayer = new google.maps.Data();
+            streetLayer.addGeoJson(streets);
+            streetLayer.setStyle({
+              strokeColor: '#0000FF',
+              strokeWeight: 2
+            }); 
+            // hiển thị lớp đường phố
+            streetLayer.setMap(map);
+            streetLayer.setClickable(false);
+          });
+
         // Tạo lớp giao thông (Traffic Layer)
         trafficLayer = new google.maps.TrafficLayer();
         
@@ -61,20 +104,16 @@
           trafficOn = !trafficOn;
           if (trafficOn) {
             trafficLayer.setMap(map);
-            document.getElementById("toggleTraffic").textContent = "Tắt Traffic";
+            document.getElementById("toggleTraffic").textContent = "TẮT TRAFFIC";
           } else {
             trafficLayer.setMap(null);
-            document.getElementById("toggleTraffic").textContent = "Bật Traffic";
+            document.getElementById("toggleTraffic").textContent = "BẬT TRAFFIC";
           }
         });
 
         directionsService = new google.maps.DirectionsService();
         directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
         directionsRenderer.setMap(map);
-
-        map.addListener("click", (e) => {
-          handleMapClick(e.latLng);
-        });
 
         document.getElementById("clearBtn").addEventListener("click", clearAll);
       }
