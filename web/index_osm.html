@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+
+<html>
+
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <title>Map Project - Cầu Giấy (Thuật toán A*)</title>
+
+    <style>
+      html, body { height: 100%; margin: 0; padding: 0; }
+      #map { height: 90vh; width: 100%; }
+      #controls {
+        padding: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: rgba(255,255,255,0.9);
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        z-index: 1000;
+      }
+      #info { padding: 8px; font-size: 14px; }
+      button { padding: 6px 10px; cursor: pointer; }
+    </style>
+
+    <script src='https://unpkg.com/@turf/turf@latest/turf.min.js'></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  </head>
+
+  <body>
+    <div id="controls">
+      <button id="clearBtn">DELETE</button>
+      <!--<button id="toggleTraffic">TRAFFIC</button>-->
+    </div>
+
+    <div id="map"></div>
+
+    <div id="info" style="position: absolute; bottom:8px; left:8px; background: rgba(255,255,255,0.9); border-radius:6px; padding:8px; z-index:1000;">
+      <div id="startInfo">Start: —</div>
+      <div id="endInfo">End: —</div>
+      <div id="distInfo">Distance: —</div>
+    </div>
+      
+    <script>
+      // Biến toàn cục
+      let map;
+      let startMarker = null;
+      let endMarker = null;
+      let boundaryPoly; 
+      let streetLayer;
+      let graph = new Map(); 
+      let nodes = []; 
+      let pathPolyline = null; 
+      let isGraphReady = false;
+      // Icon cho điểm bắt đầu và kết thúc
+      const startPinIcon = L.icon({
+        iconUrl: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        iconSize: [20, 34], iconAnchor: [10, 34]
+      });
+      const endPinIcon = L.icon({
+        iconUrl: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        iconSize: [20, 34], iconAnchor: [10, 34]
+      });
+
+      // Khởi tạo bản đồ
+      function initMap(){
+        let mapOptions = {
+          center: [21.03, 105.791],
+          zoom: 15,
+        };
+        // Tạo đối tượng bản đồ OSM
+        map = L.map('map', mapOptions);
+        let osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+        map.addLayer(osmLayer);
+        // Tải và hiển thị ranh giới quận Cầu Giấy
+        let boundaryGeoJsonFeature;
+        fetch("boundary.geojson")
+          .then(r => r.json())
+          .then(boundary => {
+            boundaryGeoJsonFeature = boundary.features[0];
+            const coords = boundary.features[0].geometry.coordinates[0].map(
+              c => [c[1], c[0]]
+            );
+            // Vẽ đường viền ranh giới
+            L.polyline(coords, { 
+              color: "#B50CF7", 
+              weight: 3 
+            }).addTo(map);
+            // Tạo mask tối bên ngoài ranh giới
+            const outerBounds = [
+              [90, -180], [90, 180], [-90, 180], [-90, -180]
+            ];
+            // Tạo đa giác mask
+            L.polygon([ outerBounds, coords ], {
+              color: 'none',
+              fillColor: '#000',
+              fillOpacity: 0.5,
+              clickable: false
+            }).addTo(map);
+            // Chỉ cho phép click trong ranh giới
+            map.on("click", (e) => {
+              const clickedPoint = turf.point([e.latlng.lng, e.latlng.lat]);
+              if (turf.booleanPointInPolygon(clickedPoint, boundaryGeoJsonFeature)) {
+                handleMapClick(e.latlng);
+              } else {
+                alert("Vui lòng chọn điểm trong khu vực Cầu Giấy.");
+              }
+            });
+          });
+
+        // Tải và hiển thị dữ liệu đường phố
+        fetch("caugiay_osmnx.geojson")
+          .then(r => r.json())
+          .then(streets => {
+            // Xây dựng lớp đường phố
+            streetLayer = L.geoJSON(streets);
+            buildGraph(streets);
+            isGraphReady = true;
+          });
+          // Nút xóa điểm bắt đầu và kết thúc
+          document.getElementById('clearBtn').onclick = clearMarkers;
+      }
+
+// DEMO
+      // Cài đặt hàng đợi ưu tiên
+      class PriorityQueue {
+        constructor() { this.elements = []; }
+        isEmpty() { return this.elements.length === 0; }
+        enqueue(item, priority) {
+          this.elements.push({ item, priority });
+          this.elements.sort((a, b) => a.priority - b.priority);
+        }
+        dequeue() {
+          if (this.isEmpty()) return null;
+          return this.elements.shift().item;
+        }
+      }
+
+      // Hàm heuristic (ước lượng khoảng cách)
+      function heuristic(a, b) {
+        return turf.distance(a.coord, b.coord, { units: 'meters' });
+      }
+      
+      // Hàm tính khoảng cách giữa hai node
+      function getDistance(a, b) {
+        return turf.distance(a.coord, b.coord, { units: 'meters' });
+      }
+
+      // Hàm lấy trọng số đường đi
+      function getWeight(properties) {
+        if (!properties || !properties.highway) return 2.0;
+        switch (properties.highway) {
+          case 'motorway':
+            return 1.0;
+          case 'trunk': 
+            return 1.2;
+          case 'primary': 
+            return 1.5;
+          case 'secondary': 
+            return 1.7;
+          case 'tertiary': 
+            return 1.9;
+          case 'unclassified': case 'residential': 
+            return 2.0;
+          case 'service': 
+            return 2.5;
+          default:
+            return 2.0;
+        }
+      }
+
+      // Hàm lấy tầng đường đi
+      function getLayer(properties) {
+        if (!properties || !properties.layer)
+          return 0;
+        if (properties.layer !== undefined) 
+          return parseInt(properties.layer, 10);
+        if (properties.level !== undefined) 
+          return parseInt(properties.level, 10);
+        if (properties.bridge && properties.bridge !== 'no') 
+          return 1;
+        if (properties.tunnel && properties.tunnel !== 'no') 
+          return -1;
+        return 0;
+      }
+
+      // Xây dựng đồ thị từ GeoJSON
+      function buildGraph(geojson) {
+        graph.clear();
+        nodes = [];
+        geojson.features.forEach((feature, index) => {
+            if (!feature || !feature.geometry) return;
+            // Chỉ xử lý LineString và MultiLineString
+            const type = feature.geometry.type;
+            let lines = []; 
+            if (type === 'LineString') {
+              lines = [feature.geometry.coordinates];
+            } else if (type === 'MultiLineString') {
+              lines = feature.geometry.coordinates;
+            } else { return; }
+            // Lấy các thuộc tính
+            const weight = getWeight(feature.properties);
+            const level = 0;
+            const oneway = (feature.properties.oneway === 'yes' || 
+                            feature.properties.oneway === true);
+            const oneway_reverse = (feature.properties.oneway === -1 || 
+                                    feature.properties.oneway === '-1');
+            // Xử lý từng dòng
+            lines.forEach((line) => {
+              if (!line || line.length < 2) return; 
+
+              const originalCoords = line;
+              let densifiedCoords = [];
+
+              for (let i = 0; i < originalCoords.length - 1; i++) {
+                const startPoint = originalCoords[i];
+                const endPoint = originalCoords[i+1];
+
+                // Thêm điểm bắt đầu
+                densifiedCoords.push(startPoint);
+
+                // Densify
+                const segmentLine = turf.lineString([startPoint, endPoint]);
+                const segmentLength = turf.length(segmentLine, { units: 'meters' });
+                const INTERVAL = 10; 
+
+                for (let d = INTERVAL; d < segmentLength; d += INTERVAL) {
+                  densifiedCoords.push(turf.along(segmentLine, d, { units: 'meters' }).geometry.coordinates);
+                }
+              }
+              // Thêm điểm GỐC cuối cùng
+              densifiedCoords.push(originalCoords[originalCoords.length - 1]);
+              
+              // Xây đồ thị mới
+              for (let i = 0; i < densifiedCoords.length; i++) {
+                const coord = densifiedCoords[i]; 
+
+                if (!coord || typeof coord[0] !== 'number' || typeof coord[1] !== 'number') {
+                  continue; 
+                }
+                const nodeId = `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+                let node;
+                
+                // Kiểm tra node giao lộ đã tồn tại chưa
+                if (!graph.has(nodeId)) {
+                  node = {
+                    id: nodeId,
+                    coord: coord,
+                    leafletLatLng: L.latLng(coord[1], coord[0]),
+                    neighbors: new Map(), 
+                    properties: feature.properties,
+                    level: level,
+                  };
+                  graph.set(nodeId, node);
+                  nodes.push(node);
+                } else {
+                  node = graph.get(nodeId);
+                }
+                
+                // Kết nối với node trước đó
+                if (i > 0) {
+                  const prevCoord = densifiedCoords[i-1];
+                  const prevNodeId = `${prevCoord[0].toFixed(6)},${prevCoord[1].toFixed(6)}`;
+                  const prevNode = graph.get(prevNodeId);
+                  
+                  if (!prevNode) {
+                     console.warn(`(Densify) Không tìm thấy node trước: ${prevNodeId}`);
+                     continue;
+                  }
+
+                  const isRoundabout = node.properties?.junction === 'roundabout';
+                  const dist = getDistance(node, prevNode); 
+                  
+                  if (!oneway_reverse) {
+                      if (!prevNode.neighbors.has(nodeId)) {
+                          prevNode.neighbors.set(nodeId, { node: node, cost: dist });
+                      }
+                  }
+                  
+                  if (!oneway && !isRoundabout) {
+                      if (!node.neighbors.has(prevNodeId)) {
+                          node.neighbors.set(prevNodeId, { node: prevNode, cost: dist });
+                      }
+                  }
+                }
+              }
+            });
+          });
+        };
+
+      // Tìm node gần nhất với tọa độ đã cho
+      function findNearestNode(latlng) {
+        let minDistance = Infinity;
+        let nearestNode = null;
+        const clickedCoord = [latlng.lng, latlng.lat]; 
+        for (const node of nodes) {
+          const distance = turf.distance(clickedCoord, node.coord, { units: 'meters' });
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestNode = node;
+          }
+        }
+        return nearestNode;
+      }
+
+      // Thuật toán A*
+      function aStar(startNode, endNode) {
+        const openSet = new PriorityQueue();
+        const cameFrom = new Map(); 
+        const gScore = new Map(); 
+        
+        graph.forEach(node => gScore.set(node.id, Infinity));
+        gScore.set(startNode.id, 0);
+        
+        const fScore = new Map();
+        graph.forEach(node => fScore.set(node.id, Infinity));
+        fScore.set(startNode.id, heuristic(startNode, endNode));
+        
+        openSet.enqueue(startNode, fScore.get(startNode.id));
+        
+        while (!openSet.isEmpty()) {
+          const current = openSet.dequeue();
+          
+          if (current.id === endNode.id) {
+            return reconstructPath(cameFrom, current); 
+          }
+          
+          current.neighbors.forEach((neighborData) => {
+            const neighbor = neighborData.node;
+            let cost = neighborData.cost;
+            const tentative_gScore = gScore.get(current.id) + cost;
+            
+            if (tentative_gScore < gScore.get(neighbor.id)) {
+              cameFrom.set(neighbor.id, current);
+              gScore.set(neighbor.id, tentative_gScore);
+              fScore.set(neighbor.id, tentative_gScore + heuristic(neighbor, endNode));
+              openSet.enqueue(neighbor, fScore.get(neighbor.id));
+            }
+          });
+        }
+        alert("Không tìm thấy đường đi giữa hai điểm.");
+        return null;
+      }
+// DEMO
+
+      // Hàm tái tạo đường đi từ bản đồ cameFrom
+      function reconstructPath(cameFrom, current) {
+        const totalPath = [current];
+        while (cameFrom.has(current.id)) {
+          current = cameFrom.get(current.id);
+          totalPath.unshift(current);
+        }
+        return totalPath;
+      }
+
+      // Xử lý thao tác click
+      function handleMapClick(latlng) {
+        if (!isGraphReady) {
+          alert("Đồ thị chưa sẵn sàng. Vui lòng chờ...");
+          return;
+        }
+        const nearestNode = findNearestNode(latlng);
+        if (!nearestNode) {
+            alert("Không tìm thấy node nào gần điểm click.");
+            return;
+        }
+        if (!startMarker) {
+          setStart(nearestNode);
+        } else if (!endMarker) {
+          setEnd(nearestNode);
+        } else {
+          if (endMarker) endMarker.remove();
+          setEnd(nearestNode); 
+        }
+      }
+
+      // Thiết lập điểm bắt đầu
+      function setStart(node) {
+        if (startMarker) startMarker.remove();
+        startMarker = L.marker(node.leafletLatLng, {
+          title: "Start Node",
+          icon: startPinIcon
+        }).addTo(map);
+        startMarker.aStarNode = node; 
+        updateInfo();
+        tryRoute();
+      }
+
+      // Thiết lập điểm kết thúc
+      function setEnd(node) {
+        if (endMarker) endMarker.remove();
+        endMarker = L.marker(node.leafletLatLng, {
+          title: "End Node",
+          icon: endPinIcon
+        }).addTo(map);
+        endMarker.aStarNode = node; 
+        updateInfo();
+        tryRoute();
+      }
+
+      // Tìm đường đi và hiển thị
+      function tryRoute(){
+        if (pathPolyline){
+          pathPolyline.remove();
+          pathPolyline = null;
+        }
+
+        if (startMarker && endMarker){
+          const startNode = startMarker.aStarNode;
+          const endNode = endMarker.aStarNode;
+          const path = aStar(startNode, endNode);
+
+          if (path){
+            const pathCoords = path.map(n => n.leafletLatLng); 
+            
+            pathPolyline = L.polyline(pathCoords, {
+              color: "#B50CF7",
+              weight: 5
+            }).addTo(map);
+
+            let totalDistance = 0;
+            for (let i = 0; i < path.length - 1; i++) {
+                totalDistance += getDistance(path[i], path[i+1]);
+            }
+            document.getElementById("distInfo").textContent = "Distance (A*): " + totalDistance.toFixed(0) + " m";
+          }
+        }
+        updateInfo();
+      }
+
+      // Xóa các điểm và đường đi
+      function clearMarkers() {
+        if (startMarker) {
+            startMarker.remove();
+            startMarker = null;
+        }
+        if (endMarker) {
+            endMarker.remove();
+            endMarker = null;
+        }
+        if (pathPolyline) {
+            pathPolyline.remove();
+            pathPolyline = null;
+        }
+        document.getElementById("startInfo").textContent = "Start: —";
+        document.getElementById("endInfo").textContent = "End: —";
+        document.getElementById("distInfo").textContent = "Distance: —";
+      }
+
+      // Cập nhật thông tin hiển thị
+      function updateInfo() {
+          document.getElementById("startInfo").textContent = startMarker
+            ? "Start: " + latLngToText(startMarker.getLatLng())
+            : "Start: —";
+          document.getElementById("endInfo").textContent = endMarker
+            ? "End: " + latLngToText(endMarker.getLatLng())
+            : "End: —";
+      }
+
+      // Chuyển đổi LatLng thành chuỗi văn bản
+      function latLngToText(latLng) {
+          return latLng.lat.toFixed(6) + ", " + latLng.lng.toFixed(6);
+      }
+
+      // Hàm gán các node vào gần đường nhất
+      function snapNodesToLines(streets) {
+        if (!streets) {
+          return;
+        }
+        for (const node of nodes) {
+          const pt = turf.point(node.coord);
+          let best = null;
+          for (const feat of streets.features) {
+            if (feat.geometry.type === 'LineString' || feat.geometry.type === 'MultiLineString') {
+              const snapped = turf.nearestPointOnLine(feat, pt, { units: 'meters' });
+              if (!best || snapped.properties.dist < best.properties.dist) {
+                best = snapped;
+              }
+            }
+          }
+          if (best) {
+            if (best.properties.dist <= 10.0) {
+              node.coord = best.geometry.coordinates;
+              node.leafletLatLng = L.latLng(best.geometry.coordinates[1], best.geometry.coordinates[0]);
+            }
+          }
+        }
+        // Xây lại đồ thị sau khi gán
+        buildGraph(streets);
+        isGraphReady = true;
+      }
+
+      // Hàm phân tích đồ thị để debug
+      function analyzeGraph() {
+        if (!graph || graph.size === 0) {
+          console.warn("Graph rỗng.");
+          return null;
+        }
+
+        // Xây dựng danh sách kề
+        const adj = new Map();
+        graph.forEach((node, id) => {
+          const neigh = Array.from(node.neighbors.keys());
+          adj.set(id, neigh);
+        });
+
+        // Tìm các thành phần liên thông bằng DFS
+        const visited = new Set();
+        const components = [];
+
+        function dfs(startId, comp) {
+          const stack = [startId];
+          visited.add(startId);
+          while (stack.length) {
+            const cur = stack.pop();
+            comp.push(cur);
+            const neighbors = adj.get(cur) || [];
+            for (const n of neighbors) {
+              if (!visited.has(n)) {
+                visited.add(n);
+                stack.push(n);
+              }
+            }
+          }
+        }
+
+        for (const id of adj.keys()) {
+          if (!visited.has(id)) {
+            const comp = [];
+            dfs(id, comp);
+            components.push(comp);
+          }
+        }
+
+        // Phân tích kết quả
+        const compSizes = components.map(c => c.length).sort((a,b)=>b-a);
+        const isolated = [];
+        graph.forEach((node, id) => {
+          if (!node.neighbors || node.neighbors.size === 0) isolated.push(id);
+        });
+
+        console.group("Graph Analysis");
+        console.log("Total nodes:", graph.size);
+        console.log("Components count:", components.length);
+        console.log("Component sizes (desc):", compSizes);
+        console.log("Isolated nodes (degree 0):", isolated.length);
+        if (isolated.length) console.log(isolated.slice(0,20));
+        console.groupEnd();
+
+        return { components, compSizes, isolated };
+      }
+
+      // Khởi tạo bản đồ khi tải trang
+      window.onload = initMap;
+    </script>
+
+  </body>
+
+</html>
