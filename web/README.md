@@ -1,8 +1,8 @@
 - [x] Nhúng Google Map
 - [x] Khởi tạo các điểm bắt đầu, kết thúc
 - [x] Nhúng Traffic Map
-- [ ] Tạo border cho phường Cầu Giấy
-- [ ] Tạo đồ thị gồm các node, các đường đi ( khoảng cách các node <=6 m)
-- [ ] Cài đặt trọng số đường đi
-- [ ] Cài đặt thuật toán
+- [x] Tạo border cho phường Cầu Giấy
+- [x] Tạo đồ thị gồm các node, các đường đi ( khoảng cách các node <=10 m)
+- [x] Cài đặt trọng số đường đi
+- [x] Cài đặt thuật toán
 - [ ] Chỉnh sửa
