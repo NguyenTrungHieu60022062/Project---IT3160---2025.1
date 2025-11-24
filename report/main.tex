@@ -1,49 +1,238 @@
-\documentclass[12pt]{article}
+\documentclass[12pt, a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[vietnamese]{babel}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{indentfirst}
+\usepackage{float}
+\usepackage[left=2.5cm, right=2cm, top=2cm, bottom=2cm]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{parskip}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,      
+    urlcolor=blue,
+}
 
 \begin{document}
-\begin{center}
-\vspace*{-4cm}
-\textbf{\normalsize ĐẠI HỌC BÁCH KHOA HÀ NỘI}\\
-\textbf{\normalsize TRƯỜNG CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG}
-\rule{0.5\textwidth}{0.4pt}\\
-\vspace*{3cm}
-\textbf{\Huge BÀI TẬP LỚN}\\
-\vspace*{0.5cm}
-\textbf{\Large MÔN: NHẬP MÔN TRÍ TUỆ NHÂN TẠO}\\
-\vspace*{3cm}
-\textbf{\Large ĐỀ TÀI: PHẦN MỀM TÌM ĐƯỜNG ĐI KHU VỰC PHƯỜNG CẦU GIẤY, HÀ NỘI}\\
-\vspace*{2cm}
-\textbf{\large NHÓM 24}\\
-\vspace*{0.5cm}
-\textbf{\normalsize Bạn 1}\\
-\textbf{\normalsize Bạn 2}\\
-\textbf{\normalsize Bạn 3}\\
-\textbf{\normalsize Bạn 4}\\
-\textbf{\normalsize Bạn 5}\\
-\vspace*{2cm}
-\text{\normalsize MÃ LỚP HỌC: 162278}\\
-\text{\normalsize GIÁO VIÊN HƯỚNG DẪN: PGS.TS TRẦN ĐÌNH KHANG}\\
-\end{center}
+
+\begin{titlepage}
+    \begin{center}
+        \textbf{\normalsize ĐẠI HỌC BÁCH KHOA HÀ NỘI}\\
+        \textbf{\normalsize TRƯỜNG CÔNG NGHỆ THÔNG TIN VÀ TRUYỀN THÔNG}
+        \par\noindent\rule{0.5\textwidth}{0.4pt}
+        
+        \vspace{3cm}
+        
+        \textbf{\Huge BÀI TẬP LỚN}\\
+        \vspace{0.5cm}
+        \textbf{\Large MÔN: NHẬP MÔN TRÍ TUỆ NHÂN TẠO}
+        
+        \vspace{3cm}
+        
+        \textbf{\Large ĐỀ TÀI: PHẦN MỀM TÌM ĐƯỜNG ĐI KHU VỰC PHƯỜNG CẦU GIẤY, HÀ NỘI}
+        
+        \vspace{2cm}
+        
+        \textbf{\large NHÓM 24}
+        \vspace{0.5cm}
+        
+        \begin{table}[h!]
+            \centering
+            \begin{tabular}{ll}
+                \textbf{Phạm Đình Minh Ánh} & \textbf{20235014} \\
+                \textbf{Lê Tuấn Duy}        & \textbf{20235063} \\
+                \textbf{Nguyễn Trung Hiếu}  & \textbf{202416199} \\
+                \textbf{Nguyễn Duy Hoàn}    & \textbf{202416206} \\
+                \textbf{Dương Tuyết Mai}    & \textbf{202416271} \\
+            \end{tabular}
+        \end{table}
+
+        \vspace{2cm}
+        
+        \textbf{\normalsize MÃ LỚP HỌC: 162278}\\
+        \textbf{\normalsize GIÁO VIÊN HƯỚNG DẪN: PGS.TS TRẦN ĐÌNH KHANG}
+        
+    \end{center}
+\end{titlepage}
 
 \newpage
-
 \tableofcontents
+\newpage
+
+\section{Giới thiệu}
+Bài tập này được thực hiện trong khuôn khổ môn học “Nhập môn Trí tuệ Nhân tạo – IT3160” với mục tiêu xây dựng một ứng dụng web hỗ trợ tìm đường trong khu vực quận Cầu Giấy. Ứng dụng sử dụng dữ liệu đường phố từ OpenStreetMap (OSM) và tích hợp Google Maps API để hiển thị bản đồ, xử lý tương tác và tìm kiếm đường đi.
+
+Bên cạnh việc xây dựng ứng dụng, đồ án còn giúp sinh viên củng cố kiến thức về biểu diễn bài toán tìm kiếm trong không gian trạng thái, hiểu rõ các thành phần như trạng thái, hành động, hàm heuristic và áp dụng các thuật toán tìm kiếm đường đi như Dijkstra hay A*. Việc kết hợp lý thuyết AI với một bài toán thực tế giúp sinh viên có cái nhìn trực quan và sâu sắc hơn về các khái niệm đã học.
 
 \newpage
 \section{Mô tả bài toán}
+Mục tiêu của bài toán là xây dựng một trang web tìm đường đi ngắn nhất giữa hai điểm trên bản đồ (phường Cầu Giấy). Người dùng có thể nhập điểm xuất phát và điểm đích (bằng cách chọn trực tiếp trên bản đồ). Hệ thống sẽ hiển thị tuyến đường ngắn nhất nối hai điểm đó trên bản đồ, đồng thời cung cấp thông tin như khoảng cách di chuyển ước tính.
+
+\subsection{Mục tiêu cụ thể}
+\begin{itemize}[noitemsep]
+    \item Cho phép người dùng tương tác trực quan trên bản đồ (OpenStreetMap).
+    \item Tính toán đường đi ngắn nhất dựa trên dữ liệu mạng lưới đường.
+    \item Hiển thị kết quả trực tiếp trên giao diện web, bao gồm vị trí điểm xuất phát và điểm kết thúc, tuyến đường và tổng chiều dài.
+\end{itemize}
+
+\subsection{Giả định và ràng buộc}
+\begin{itemize}[noitemsep]
+    \item Dữ liệu bản đồ (node, edge) được lấy từ OpenStreetMap và tiền xử lý thành đồ thị.
+    \item Chỉ xét các tuyến đường dành cho phương tiện di chuyển thông thường (ô tô, xe máy hoặc đi bộ).
+    \item Không xét đến yếu tố giao thông thời gian thực.
+    \item Không cắt ngang các khu vực không có đường đi.
+    \item Tuân thủ quy tắc giao thông (đường một chiều, đường dành cho người đi bộ,...).
+\end{itemize}
+
+\newpage
+\section{Biểu diễn bài toán}
+Bài toán tìm đường có thể được biểu diễn theo mô hình bài toán tìm kiếm trong không gian trạng thái (state-space search).
+
+\subsection{Tập trạng thái (State space)}
+Mỗi trạng thái biểu diễn vị trí hiện tại của người dùng hoặc phương tiện trên bản đồ, tương ứng với một nút (node) trong đồ thị lấy từ dữ liệu OpenStreetMap.
+\[ S = \{ s_1, s_2, \dots, s_n \} \]
+Trong đó, mỗi $ s_i $ có toạ độ [latitude, longitude] xác định vị trí địa lý của node.
+
+\textbf{Thống kê dữ liệu bản đồ:}
+Dữ liệu khu vực phường Cầu Giấy sau khi được trích xuất và làm sạch bao gồm:
+\begin{itemize}[noitemsep]
+    \item \textbf{Tổng số đỉnh (Nodes):} 3018 (tương ứng với các giao lộ).
+    \item \textbf{Tổng số cạnh (Edges):} 7997 (tương ứng với các đoạn đường nối giữa hai đỉnh).
+\end{itemize}
+Đây chính là kích thước không gian trạng thái mà thuật toán sẽ duyệt qua.
+
+\subsection{Trạng thái đầu (Initial state)}
+Trạng thái đầu là vị trí xuất phát mà người dùng chọn trên giao diện web.
+\[ s_{start} = (lat_{start}, lon_{start}) \]
+Lưu ý: Vì vị trí người dùng chọn có thể không trùng chính xác với một node của mạng đường, hệ thống sẽ tìm node gần nhất trong dữ liệu OpenStreetMap để làm đại diện cho vị trí đó:
+\[ node_{start} = \operatorname{argmin}_{v \in V} \text{Haversine}(v, s_{start}) \]
+
+\subsection{Trạng thái đích (Goal state)}
+Trạng thái đích là vị trí kết thúc do người dùng chỉ định.
+\[ s_{goal} = (lat_{goal}, lon_{goal}) \]
+Tương tự, hệ thống xác định node gần nhất trong tập node OSM:
+\[ node_{goal} = \operatorname{argmin}_{v \in V} \text{Haversine}(v, s_{goal}) \]
+
+\subsection{Tập hành động (Actions)}
+Từ mỗi trạng thái hiện tại (node $u$), các hành động có thể thực hiện là di chuyển sang các node kề ($v$) có cạnh nối trực tiếp.
+\[ A(s) = \{ \text{Move}(u \to v) \mid (u,v) \in E \} \]
+Mỗi hành động tương ứng với việc đi qua một đoạn đường trên bản đồ.
+
+\newpage
+\section{Phương pháp tìm kiếm}
+Hệ thống sử dụng thuật toán A* tự cài đặt chạy trên dữ liệu OSM. Phần này mô tả chi tiết quy trình tiền xử lý và tìm kiếm đường đi.
+
+\subsection{Tiền xử lý dữ liệu (Data Preprocessing)}
+Trước khi áp dụng thuật toán tìm kiếm, dữ liệu bản đồ thô từ OpenStreetMap cần được xử lý để đảm bảo tính đúng đắn:
 \begin{itemize}
-    \item Xét một mảnh bản đồ của phường Cầu Giấy, Hà Nội. Bài toán yêu cầu tìm đường đi giữa 2 điểm A và B bất kỳ và biểu diễn đường đi đó trên bản đồ.
-    \item Ràng buộc: 
+    \item \textbf{Liên thông đồ thị:} Dữ liệu đường phố thực tế thường chứa các phần không liên thông (các "đảo" nhỏ, khu vực bị cô lập hoặc lỗi dữ liệu). Nhóm sử dụng thư viện \texttt{NetworkX} để tìm các thành phần liên thông yếu (Weakly Connected Components) và chỉ giữ lại thành phần lớn nhất. Điều này đảm bảo từ một điểm bất kỳ trong đồ thị luôn tồn tại đường đi đến các điểm khác.
+    \item \textbf{Làm dày điểm (Densification):} Khi nạp dữ liệu vào ứng dụng web, các cạnh dài (đoạn đường thẳng dài) sẽ được thuật toán chia nhỏ thành các đoạn ngắn hơn (khoảng 10m). Việc này giúp quá trình chọn điểm xuất phát/đích (Start/End Node) bám sát hơn với vị trí click chuột thực tế của người dùng, tránh sai số quá lớn.
+\end{itemize}
+
+\subsection{Quy trình tìm kiếm đường đi}
+
+\subsubsection{Bước 1 – Xác định trạng thái đầu và trạng thái đích}
+Khi người dùng chọn hai điểm trên bản đồ OSM:
+\begin{itemize}[noitemsep]
+    \item Hệ thống duyệt toàn bộ danh sách node từ file GeoJSON \texttt{caugiay\_osmnx.geojson}.
+    \item Tìm node có khoảng cách đường chim bay (Haversine) ngắn nhất đến vị trí người dùng chọn.
+\end{itemize}
+Tọa độ của hai node gần nhất lần lượt trở thành:
+\begin{itemize}[noitemsep]
+    \item Trạng thái đầu ($node_{start}$)
+    \item Trạng thái đích ($node_{goal}$)
+\end{itemize}
+
+\subsubsection{Bước 2 – Tìm đường đi bằng thuật toán A*}
+A* được dùng để tìm đường đi tối ưu từ $node_{start}$ đến $node_{goal}$. Hàm đánh giá có dạng:
+\[ f(n) = g(n) + h(n) \]
+Trong đó:
+\begin{itemize}[noitemsep]
+    \item $g(n)$: tổng chi phí thực tế từ start đến n (tổng các đoạn đường đã đi qua).
+    \item $h(n)$: chi phí ước lượng từ n đến goal, tính theo khoảng cách đường chim bay (Haversine).
+\end{itemize}
+Trên giao diện phần mềm, $h(n)$ được trực quan hóa bằng \textbf{đường nét đứt màu xanh} nối trực tiếp từ điểm đang xét đến đích.
+
+Công thức Heuristic Haversine:
+\[
+h(n)=6371\cdot \arccos\left( \sin(\text{lat}_1)\sin(\text{lat}_2) + \cos(\text{lat}_1)\cos(\text{lat}_2)\cos(\text{lng}_2 - \text{lng}_1) \right)
+\]
+
+\subsubsection{Quy trình chi tiết}
+\textbf{1. Khởi tạo:}
+\begin{itemize}[noitemsep]
+    \item Đưa $node_{start}$ vào hàng đợi ưu tiên (priority queue) với $g(start) = 0$.
+    \item Khởi tạo các bảng: 
     \begin{itemize}
-    \item Chỉ được phép đi trên các tuyến đường, không được phép đi xuyên qua các công trình.
-    \item ... (thời tiết)
-    \item ... (lưu lượng)
-    \item ...
+        \item $gScore$: chi phí thực tế từ $start$ đến từng $node$.
+        \item $fScore$: giá trị ước lượng $f(n)$.
+        \item $cameFrom$: lưu $node$ cha để truy vết đường đi.
     \end{itemize}
 \end{itemize}
+
+\textbf{2. Duyệt đồ thị:}
+\begin{itemize}[noitemsep]
+    \item Mỗi vòng lặp, lấy $node$ có $fScore$ nhỏ nhất khỏi hàng đợi.
+    \item Nếu $node$ đó là $goal$ $\rightarrow$ dừng thuật toán.
+\end{itemize}
+
+\textbf{3. Tính toán chi phí và mở rộng node:}
+\begin{itemize}[noitemsep]
+    \item Với mỗi $node$ kề ($neighbor$):
+    \begin{itemize}
+        \item Tính $g(new) = g(current) + cost(current, neighbor)$.
+        \item Tính $h(neighbor)$ bằng Haversine.
+        \item Tính $f(new) = g(new) + h(neighbor)$.
+    \end{itemize}
+    \item Nếu $neighbor$ chưa từng được xét, hoặc $g(new)$ tốt hơn giá trị cũ: Cập nhật $gScore$, $fScore$, $cameFrom$ và đưa vào hàng đợi.
+\end{itemize}
+
+\textbf{4. Kết thúc:}
+Thuật toán kết thúc khi $node_{goal}$ được lấy ra khỏi priority queue.
+
+\subsubsection{Truy vết đường đi}
+\begin{itemize}[noitemsep]
+    \item Từ $node_{goal}$, dùng bảng $cameFrom$ để lần ngược về $node_{start}$.
+    \item Đảo ngược danh sách này để tạo đường đi hoàn chỉnh.
+\end{itemize}
+
+\section{Công cụ sử dụng}
+\begin{itemize}[noitemsep]
+    \item OpenStreetMap (OSM) – dữ liệu boundary và network.
+    \item Định dạng GeoJSON.
+    \item HTML, CSS, JavaScript.
+    \item Python (thư viện OSMnx, GeoPandas, NetworkX) – Tiền xử lý đồ thị.
+\end{itemize}
+
+\section{Kết quảm}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{1.jpg}
+    \caption{Biểu diễn không gian trạng thái trên bản đồ}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{2.jpeg}
+    \caption{Minh họa quá trình Tiền xử lý (Densification)}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{3.jpg}
+    \caption{Xác định trạng thái đầu}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{4.jpg}
+    \caption{Minh họa kết quả tìm kiếm.}
+\end{figure}
+
 \end{document}

@@ -42,6 +42,13 @@ columns_to_keep = [
 final_columns = [col for col in columns_to_keep if col in gdf_edges.columns]
 gdf_final_edges = gdf_edges[final_columns]
 
+# In thông tin thống kê
+print("-" * 30)
+print("THỐNG KÊ DỮ LIỆU BÁO CÁO:")
+print(f"1. Số lượng Nút (Nodes/States): {G.number_of_nodes()}")
+print(f"2. Số lượng Cạnh (Edges/Actions): {G.number_of_edges()}")
+print("-" * 30)
+
 # 5. Lưu GeoDataFrame thành file GeoJSON
 print(f"Đang lưu file vào: {output_filename}...")
 gdf_final_edges.to_file(output_filename, driver="GeoJSON")

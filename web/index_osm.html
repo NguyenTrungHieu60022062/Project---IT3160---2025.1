@@ -55,15 +55,17 @@
       let graph = new Map(); 
       let nodes = []; 
       let pathPolyline = null; 
+      let beelinePolyline = null;
+      let originalNodesLayer = null;
       let isGraphReady = false;
       // Icon cho điểm bắt đầu và kết thúc
       const startPinIcon = L.icon({
         iconUrl: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-        iconSize: [20, 34], iconAnchor: [10, 34]
+        iconSize: [30, 34], iconAnchor: [10, 34]
       });
       const endPinIcon = L.icon({
         iconUrl: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        iconSize: [20, 34], iconAnchor: [10, 34]
+        iconSize: [30, 34], iconAnchor: [10, 34]
       });
 
       // Khởi tạo bản đồ
@@ -76,6 +78,7 @@
         map = L.map('map', mapOptions);
         let osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
         map.addLayer(osmLayer);
+        originalNodesLayer = L.layerGroup().addTo(map);
         // Tải và hiển thị ranh giới quận Cầu Giấy
         let boundaryGeoJsonFeature;
         fetch("boundary.geojson")
@@ -119,6 +122,10 @@
             // Xây dựng lớp đường phố
             streetLayer = L.geoJSON(streets);
             buildGraph(streets);
+            const nodesAsGeoJSON = nodes.map(n => turf.point(n.coord));
+            //L.geoJSON(turf.featureCollection(nodesAsGeoJSON), {
+            //    pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 1, color: 'red', fillOpacity: 0.8 })
+            //}).addTo(map);
             isGraphReady = true;
           });
           // Nút xóa điểm bắt đầu và kết thúc
@@ -192,6 +199,11 @@
       function buildGraph(geojson) {
         graph.clear();
         nodes = [];
+        if (originalNodesLayer) {
+            originalNodesLayer.clearLayers();
+        }
+        let drawnNodes = new Set();
+
         geojson.features.forEach((feature, index) => {
             if (!feature || !feature.geometry) return;
             // Chỉ xử lý LineString và MultiLineString
@@ -212,6 +224,20 @@
             // Xử lý từng dòng
             lines.forEach((line) => {
               if (!line || line.length < 2) return; 
+              // Vẽ các node gốc
+              const originalPoints = [line[0], line[line.length - 1]];
+              originalPoints.forEach(pt => {
+                  const key = `${pt[0].toFixed(6)},${pt[1].toFixed(6)}`;
+                  if (!drawnNodes.has(key)) {
+                      L.circleMarker([pt[1], pt[0]], {
+                          radius: 1,
+                          color: '#FF6600',
+                          fillColor: '#FF6600',
+                          fillOpacity: 0.8
+                      });//.addTo(originalNodesLayer);
+                      drawnNodes.add(key);
+                  }
+              });
 
               const originalCoords = line;
               let densifiedCoords = [];
@@ -409,9 +435,32 @@
           pathPolyline = null;
         }
 
+        if (beelinePolyline){
+          beelinePolyline.remove();
+          beelinePolyline = null;
+        }
+
         if (startMarker && endMarker){
           const startNode = startMarker.aStarNode;
           const endNode = endMarker.aStarNode;
+
+          // Tính và vẽ đường chim bay
+          const startLatLng = startMarker.getLatLng();
+          const endLatLng = endMarker.getLatLng();
+          // Vẽ đường nét đứt
+          beelinePolyline = L.polyline([startLatLng, endLatLng], {
+            color: 'blue',
+            dashArray: '10, 10',
+            weight: 2,
+            opacity: 0.6
+          }).addTo(map);
+          // Tính khoảng cách chim bay
+          const h_dist = turf.distance(
+              [startLatLng.lng, startLatLng.lat], 
+              [endLatLng.lng, endLatLng.lat], 
+              { units: 'meters' }
+          );
+
           const path = aStar(startNode, endNode);
 
           if (path){
@@ -427,6 +476,7 @@
                 totalDistance += getDistance(path[i], path[i+1]);
             }
             document.getElementById("distInfo").textContent = "Distance (A*): " + totalDistance.toFixed(0) + " m";
+            document.getElementById("distInfo").textContent += " | Distance (Heuristic): " + h_dist.toFixed(0) + " m";
           }
         }
         updateInfo();
@@ -445,6 +495,10 @@
         if (pathPolyline) {
             pathPolyline.remove();
             pathPolyline = null;
+        }
+        if (beelinePolyline) {
+            beelinePolyline.remove();
+            beelinePolyline = null;
         }
         document.getElementById("startInfo").textContent = "Start: —";
         document.getElementById("endInfo").textContent = "End: —";
